@@ -93,7 +93,8 @@ All local-bind, all unauthenticated.
 GET  /                     UI
 GET  /repos                repos + pause state (JSON)
 GET  /issues               all airplane-labeled issues (JSON)
-GET  /chat?repo=&message=  SSE chat stream
+GET  /chat?repo=&message=  SSE chat stream (used by browser EventSource)
+POST /chat                 SSE chat stream, JSON body {repo, message}
 POST /fix/:repo/:number    manual fix trigger
 POST /pause | /resume      global pause
 POST /pause/:repo          per-repo pause
@@ -139,3 +140,19 @@ src/
   run.ts        child_process wrappers
   ui.html       single-page UI (vanilla JS, no build)
 ```
+
+About 1.9k lines of TypeScript total. Reading the whole thing should take an afternoon.
+
+## Design
+
+The full design constraints (and what Airplane explicitly does NOT do) live in [DECISIONS.md](./DECISIONS.md). Highlights:
+
+- No DB, no auth, no retries, no plugin system, no message history, no parallel fixing.
+- Reviewer is a separate Claude invocation — not a continuation. No fixer↔reviewer iteration.
+- Claude Code runs in `--dangerously-skip-permissions` mode. Tailscale + a single-user laptop is the security boundary.
+- All job state lives in GitHub labels. Restarting the process loses nothing meaningful.
+- Recovery is structural: stuck `:fixing` issues get reset; orphan worktrees get pruned; a stale lockfile gets replaced.
+
+## License
+
+MIT.
