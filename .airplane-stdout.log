@@ -1,9 +1,0 @@
-[2026-04-24 21:32:44] config.loaded {"repos":1}
-[2026-04-24 21:32:44] startup.checks.ok
-[2026-04-24 21:32:49] cleanup.orphan.removed {"repo":"smoke","worktree":"/Users/basket/workspace/airplane/.airplane/worktrees/smoke/1"}
-[2026-04-24 21:32:49] server.listen {"port":4242}
-[2026-04-24 21:32:49] startup.ready {"port":4242,"repos":1,"intervalMs":60000}
-[2026-04-24 21:33:01] reviewer.start {"repo":"smoke","pr":2}
-[2026-04-24 21:33:12] reviewer.approve.soft_fail {"repo":"smoke","pr":2,"error":"gh pr review failed: failed to create review: GraphQL: Review Can not approve your own pull request (addPullRequestReview)\n"}
-[2026-04-24 21:33:18] reviewer.approved {"repo":"smoke","pr":2}
-[2026-04-24 21:33:21] cleanup.merged {"repo":"smoke","pr":2,"branch":"airplane/issue-1-greet-ts-should-accept-a-name-argument"}

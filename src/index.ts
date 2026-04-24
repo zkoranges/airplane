@@ -34,6 +34,8 @@ const app = buildApp();
 const server = serve({
   port: cfg.port,
   hostname: "0.0.0.0",
+  // SSE streams (chat, log) hold the connection open well past Bun's 10s default.
+  idleTimeout: 0,
   fetch: app.fetch,
 });
 log("server.listen", { port: server.port });

@@ -25,6 +25,11 @@ import { claudeOneShot } from "./claude";
 import { log } from "./log";
 
 let running = false;
+let currentReviewerChild: { kill: () => void } | null = null;
+
+export function killCurrentReviewer() {
+  currentReviewerChild?.kill();
+}
 
 function repoContext(repoPath: string): string {
   for (const f of ["CLAUDE.md", "AGENTS.md", "README.md"]) {
@@ -128,7 +133,13 @@ async function reviewOne(repo: RepoConfig, prNum: number, prTitle: string) {
     const ctx = repoContext(repo.path);
     const prompt = reviewerPrompt(diff, issueTitle, issueBody, ctx);
 
-    const res = await claudeOneShot(repo.path, prompt, { timeoutMs: 10 * 60 * 1000 });
+    const res = await claudeOneShot(repo.path, prompt, {
+      timeoutMs: 10 * 60 * 1000,
+      onSpawn: (kill) => {
+        currentReviewerChild = { kill };
+      },
+    });
+    currentReviewerChild = null;
     if (res.timedOut) {
       log("reviewer.timeout", { repo: repo.name, pr: prNum });
       // Remove label so we try again next tick

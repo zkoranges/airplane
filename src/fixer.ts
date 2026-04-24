@@ -142,7 +142,13 @@ async function runFixerOnce(repo: RepoConfig, issue: Issue): Promise<void> {
     const prompt = fixerPrompt(repo, issue, comments, branch);
     log("fixer.claude.start", { repo: repo.name, issue: issue.number, wt });
 
-    const res = await claudeOneShot(wt, prompt, { timeoutMs: cfg.fixerTimeoutMs });
+    const res = await claudeOneShot(wt, prompt, {
+      timeoutMs: cfg.fixerTimeoutMs,
+      onSpawn: (kill) => {
+        currentChild = { kill };
+      },
+    });
+    currentChild = null;
     log("fixer.claude.done", {
       repo: repo.name,
       issue: issue.number,

@@ -6,7 +6,7 @@ const YOLO = "--dangerously-skip-permissions";
 export async function claudeOneShot(
   cwd: string,
   prompt: string,
-  opts: { timeoutMs?: number } = {}
+  opts: { timeoutMs?: number; onSpawn?: (kill: () => void) => void } = {}
 ): Promise<{ code: number; stdout: string; stderr: string; timedOut: boolean }> {
   let out = "";
   let err = "";
@@ -17,6 +17,7 @@ export async function claudeOneShot(
     (c) => (out += c),
     (c) => (err += c)
   );
+  opts.onSpawn?.(h.kill);
   const { code, timedOut } = await h.done;
   return { code, stdout: out, stderr: err, timedOut };
 }

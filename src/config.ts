@@ -1,6 +1,7 @@
 import { watch } from "chokidar";
 import { pathToFileURL } from "node:url";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync } from "node:fs";
 import { log } from "./log";
 
 export type RepoConfig = {
@@ -50,8 +51,28 @@ export function findRepo(name: string): RepoConfig | undefined {
 }
 
 async function loadOnce(): Promise<AirplaneConfig> {
-  const url = pathToFileURL(CONFIG_FILE).href + `?t=${Date.now()}`;
-  const mod = await import(url);
+  // Bun's ESM cache holds imports by URL even with ?t= suffixes, so a true
+  // reload requires a brand-new module URL. Copy the file to a unique path
+  // *inside the project root* so any relative imports it has (e.g. `import
+  // type ... from "./src/config"`) still resolve.
+  const src = readFileSync(CONFIG_FILE, "utf8");
+  const stageDir = resolve(process.cwd(), ".airplane/config-stage");
+  mkdirSync(stageDir, { recursive: true });
+  // best-effort cleanup of older stages
+  try {
+    for (const f of readdirSync(stageDir)) {
+      try {
+        unlinkSync(join(stageDir, f));
+      } catch {}
+    }
+  } catch {}
+  // The stage file lives one directory deeper than the original
+  // (.airplane/config-stage/foo.ts vs ./airplane.config.ts), so rewrite
+  // any `./src/...` relative imports up one level so they still resolve.
+  const rewritten = src.replace(/(["'])\.\/(src\/)/g, "$1../../$2");
+  const tmp = join(stageDir, `cfg-${Date.now()}-${process.pid}.ts`);
+  writeFileSync(tmp, rewritten);
+  const mod = await import(pathToFileURL(tmp).href);
   const cfg: AirplaneConfig = mod.default ?? mod.config;
   if (!cfg || !Array.isArray(cfg.repos)) {
     throw new Error("airplane.config.ts must export default { repos: [...] }");

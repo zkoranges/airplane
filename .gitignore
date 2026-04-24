@@ -35,5 +35,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # airplane
 .airplane/
+.airplane-stdout.log
+.airplane-second.log
+.chat.out
 airplane.log
 airplane.config.ts

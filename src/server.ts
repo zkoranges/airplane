@@ -12,6 +12,7 @@ import {
 import { streamChat } from "./chat";
 import { tailLog } from "./log";
 import { fixerManual, killCurrentFixer } from "./fixer";
+import { killCurrentReviewer } from "./reviewer";
 import {
   AIRPLANE_LABEL,
   BLOCKED_LABEL,
@@ -123,6 +124,7 @@ export function buildApp() {
   app.post("/kill", (c) => {
     setGloballyPaused(true);
     killCurrentFixer();
+    killCurrentReviewer();
     return c.json({ ok: true });
   });
 
