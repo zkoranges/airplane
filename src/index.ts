@@ -4,8 +4,8 @@ import { loadConfig, watchConfig, getConfig, isGloballyPaused } from "./config";
 import { log } from "./log";
 import { startupChecks, startupRecovery } from "./startup";
 import { acquireLock } from "./lockfile";
-import { fixerTick } from "./fixer";
-import { reviewerTick } from "./reviewer";
+import { fixerTick, killCurrentFixer } from "./fixer";
+import { reviewerTick, killCurrentReviewer } from "./reviewer";
 import { cleanupTick } from "./cleanup";
 
 const lock = acquireLock();
@@ -70,3 +70,17 @@ process.on("unhandledRejection", (err) => {
 process.on("uncaughtException", (err) => {
   log("uncaught.exception", { error: String(err?.message ?? err) });
 });
+
+// On graceful shutdown: kill any running Claude child first so we don't
+// leave orphans, then exit (lockfile cleanup runs on `exit`).
+let shuttingDown = false;
+for (const sig of ["SIGINT", "SIGTERM"] as const) {
+  process.on(sig, () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    log("shutdown", { signal: sig });
+    try { killCurrentFixer(); } catch {}
+    try { killCurrentReviewer(); } catch {}
+    process.exit(sig === "SIGINT" ? 130 : 143);
+  });
+}

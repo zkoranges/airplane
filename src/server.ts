@@ -70,17 +70,16 @@ export function buildApp() {
     return c.json({ issues: uniq });
   });
 
-  app.get("/chat", (c) => {
-    const repoName = c.req.query("repo") || "";
-    const message = c.req.query("message") || "";
+  // GET form is for browser EventSource (which is GET-only). The doc-spec
+  // POST form takes a JSON body; both routes share the same SSE handler.
+  const chatHandler = (repoName: string, message: string) => async (c: any) => {
     const repo = findRepo(repoName);
     if (!repo) return c.text(`unknown repo: ${repoName}`, 400);
     if (!message) return c.text("missing message", 400);
-
     return streamSSE(c, async (stream) => {
       let done = false;
       const h = streamChat(repo, message, (chunk) => {
-        stream.writeSSE({ event: "chunk", data: chunk });
+        stream.writeSSE({ event: "chunk", data: chunk }).catch(() => {});
       });
       h.done.then(() => {
         done = true;
@@ -92,6 +91,28 @@ export function buildApp() {
       });
       await h.done;
     });
+  };
+
+  app.get("/chat", (c) =>
+    chatHandler(c.req.query("repo") || "", c.req.query("message") || "")(c)
+  );
+
+  app.post("/chat", async (c) => {
+    let repoName = "";
+    let message = "";
+    try {
+      const body = await c.req.json<{ repo?: string; message?: string }>();
+      repoName = body.repo || "";
+      message = body.message || "";
+    } catch {
+      // also accept form-encoded bodies
+      try {
+        const f = await c.req.parseBody();
+        repoName = String(f.repo || "");
+        message = String(f.message || "");
+      } catch {}
+    }
+    return chatHandler(repoName, message)(c);
   });
 
   app.post("/fix/:repo/:num", async (c) => {
@@ -133,10 +154,12 @@ export function buildApp() {
       const watcher = tailLog((line) => {
         stream.writeSSE({ data: line }).catch(() => {});
       });
-      stream.onAbort(() => watcher.close());
-      // Keep stream open
+      // Hold the stream open until the client disconnects, then clean up.
       await new Promise<void>((resolve) => {
-        stream.onAbort(() => resolve());
+        stream.onAbort(() => {
+          watcher.close();
+          resolve();
+        });
       });
     });
   });

@@ -49,6 +49,10 @@ Choices I made where the design doc was silent or open-ended. Every one picks th
 
 - The UI shows clickable GitHub links. I fetch `nameWithOwner` from `gh repo view` lazily and cache it per repo path. Not worth a config field.
 
+## /chat: GET in addition to POST
+
+The doc says `POST /chat` (SSE). Browser `EventSource` is GET-only, and using `EventSource` keeps the UI to a few lines. So `/chat` accepts **both** GET (UI / EventSource) and POST (matches the doc, takes a JSON or form body). They share one handler.
+
 ## Chat is stateless
 
 - Matches the doc exactly: each `/chat` call spawns a fresh `claude -p`. If the user wants continuity within a repo, they rely on Claude Code's own `--continue` in a local terminal. Airplane does not maintain a message history or session store.

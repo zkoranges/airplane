@@ -1,13 +1,11 @@
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const PID_FILE = resolve(process.cwd(), ".airplane/airplane.pid");
 
 function ensureDir() {
   const dir = resolve(process.cwd(), ".airplane");
-  if (!existsSync(dir)) {
-    require("node:fs").mkdirSync(dir, { recursive: true });
-  }
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 }
 
 export function acquireLock(): { ok: boolean; pid?: number } {
@@ -23,21 +21,14 @@ export function acquireLock(): { ok: boolean; pid?: number } {
     } catch {}
   }
   writeFileSync(PID_FILE, String(process.pid));
-  const cleanup = () => {
+  // Only register an `exit` cleanup here. SIGINT/SIGTERM are handled by
+  // index.ts so it can sequence killing in-flight children before we exit.
+  process.on("exit", () => {
     try {
       if (existsSync(PID_FILE) && readFileSync(PID_FILE, "utf8").trim() === String(process.pid)) {
         unlinkSync(PID_FILE);
       }
     } catch {}
-  };
-  process.on("exit", cleanup);
-  process.on("SIGINT", () => {
-    cleanup();
-    process.exit(130);
-  });
-  process.on("SIGTERM", () => {
-    cleanup();
-    process.exit(143);
   });
   return { ok: true };
 }
