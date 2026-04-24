@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Airplane</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: #0b0d10; color: #e6e6e6; font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  header { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid #23262b; position: sticky; top: 0; background: #0b0d10; z-index: 10; }
+  header h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: 0.5px; }
+  header .spacer { flex: 1; }
+  nav { display: flex; gap: 4px; }
+  nav button { background: #181b20; color: #cbd1d8; border: 1px solid #23262b; padding: 8px 12px; border-radius: 6px; font: inherit; cursor: pointer; }
+  nav button.active { background: #1f86ff; color: #fff; border-color: #1f86ff; }
+  main { padding: 12px; padding-bottom: 80px; max-width: 900px; margin: 0 auto; }
+  .view { display: none; }
+  .view.active { display: block; }
+  .card { border: 1px solid #23262b; background: #12151a; border-radius: 8px; padding: 12px; margin: 8px 0; }
+  input, select, textarea, button { font: inherit; color: #e6e6e6; background: #181b20; border: 1px solid #23262b; border-radius: 6px; padding: 10px; }
+  button { cursor: pointer; }
+  button.primary { background: #1f86ff; border-color: #1f86ff; color: #fff; }
+  button.danger { background: #b33; border-color: #b33; color: #fff; }
+  label { display: block; font-size: 12px; color: #8a95a2; margin-bottom: 4px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  pre { background: #0f1115; padding: 10px; border-radius: 6px; white-space: pre-wrap; word-break: break-word; max-height: 60vh; overflow: auto; font-size: 12px; }
+  .issue { display: flex; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px dashed #23262b; }
+  .issue:last-child { border-bottom: 0; }
+  .issue a { color: #1f86ff; text-decoration: none; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; margin-left: 4px; }
+  .tag.queued { background: #0e8a16; }
+  .tag.fixing { background: #b58900; }
+  .tag.review { background: #1d76db; }
+  .tag.blocked { background: #b60205; }
+  .tag.failed { background: #d93f0b; }
+  .chat-form { position: fixed; left: 0; right: 0; bottom: 0; padding: 8px; background: #0b0d10; border-top: 1px solid #23262b; display: none; gap: 6px; }
+  .chat-form.active { display: flex; }
+  .chat-form input.msg { flex: 1; }
+  .chat-form select { flex-basis: 120px; }
+  .status { padding: 6px 10px; border-radius: 6px; background: #181b20; font-size: 12px; color: #8a95a2; }
+  h3 { margin: 14px 0 6px; font-size: 13px; color: #8a95a2; text-transform: uppercase; letter-spacing: 0.5px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>airplane</h1>
+  <span id="status" class="status">loading…</span>
+  <span class="spacer"></span>
+  <nav>
+    <button data-view="chat" class="active">chat</button>
+    <button data-view="issues">issues</button>
+    <button data-view="activity">log</button>
+    <button data-view="controls">controls</button>
+  </nav>
+</header>
+
+<main>
+  <section id="chat" class="view active">
+    <div id="chat-output" class="card"><pre id="chat-stream">Pick a repo, type a message, hit send.</pre></div>
+  </section>
+
+  <section id="issues" class="view">
+    <div class="row" style="margin-bottom:8px">
+      <button id="refresh-issues">refresh</button>
+    </div>
+    <div id="issues-list"></div>
+  </section>
+
+  <section id="activity" class="view">
+    <pre id="log-stream" style="max-height: 70vh"></pre>
+  </section>
+
+  <section id="controls" class="view">
+    <div class="card">
+      <h3>Global</h3>
+      <div class="row">
+        <button id="pause-global">pause</button>
+        <button id="resume-global">resume</button>
+        <button id="kill" class="danger">kill (stop child + timer)</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Per repo</h3>
+      <div id="repo-controls"></div>
+    </div>
+    <div class="card">
+      <h3>Fix now</h3>
+      <div class="row">
+        <select id="fix-repo"></select>
+        <input id="fix-num" placeholder="issue #" style="width: 100px" />
+        <button id="fix-go" class="primary">fix now</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<form class="chat-form active" id="chat-form">
+  <select id="chat-repo" required></select>
+  <input class="msg" id="chat-msg" placeholder="message…" autocomplete="off" required />
+  <button class="primary" type="submit">send</button>
+</form>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+
+function setView(name) {
+  $$("nav button").forEach(b => b.classList.toggle("active", b.dataset.view === name));
+  $$(".view").forEach(v => v.classList.toggle("active", v.id === name));
+  $("#chat-form").classList.toggle("active", name === "chat");
+  if (name === "issues") loadIssues();
+  if (name === "activity") startLogStream();
+  if (name === "controls") renderRepoControls();
+}
+$$("nav button").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
+
+let repos = [];
+async function loadRepos() {
+  const r = await fetch("/repos");
+  const data = await r.json();
+  repos = data.repos || [];
+  const set = (sel) => {
+    sel.innerHTML = "";
+    for (const r of repos) {
+      const opt = document.createElement("option");
+      opt.value = r.name;
+      opt.textContent = r.name + (r.paused ? " (paused)" : "");
+      sel.appendChild(opt);
+    }
+  };
+  set($("#chat-repo"));
+  set($("#fix-repo"));
+  $("#status").textContent = `${repos.length} repo${repos.length === 1 ? "" : "s"} · ${data.paused ? "PAUSED" : "running"}`;
+}
+
+async function loadIssues() {
+  $("#issues-list").innerHTML = "<div class='card'>loading…</div>";
+  const r = await fetch("/issues");
+  const data = await r.json();
+  const groups = { queued: [], fixing: [], review: [], blocked: [], failed: [] };
+  for (const i of data.issues) {
+    if (i.labels.includes("airplane:fixing")) groups.fixing.push(i);
+    else if (i.labels.includes("airplane:review")) groups.review.push(i);
+    else if (i.labels.includes("airplane:blocked")) groups.blocked.push(i);
+    else if (i.labels.includes("airplane:failed")) groups.failed.push(i);
+    else if (i.labels.includes("airplane")) groups.queued.push(i);
+  }
+  const html = [];
+  for (const [k, arr] of Object.entries(groups)) {
+    if (!arr.length) continue;
+    html.push(`<div class="card"><h3>${k} (${arr.length})</h3>`);
+    for (const i of arr) {
+      html.push(`<div class="issue">
+        <div><a href="${i.url}" target="_blank">#${i.number}</a> <b>${escapeHtml(i.title)}</b><br><small>${i.repo}</small></div>
+        <div><span class="tag ${k}">${k}</span></div>
+      </div>`);
+    }
+    html.push(`</div>`);
+  }
+  if (!html.length) html.push("<div class='card'>no airplane-labeled issues</div>");
+  $("#issues-list").innerHTML = html.join("");
+}
+$("#refresh-issues").addEventListener("click", loadIssues);
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+
+let logEs = null;
+function startLogStream() {
+  if (logEs) return;
+  const el = $("#log-stream");
+  el.textContent = "";
+  logEs = new EventSource("/log");
+  logEs.onmessage = (ev) => {
+    el.textContent += ev.data + "\n";
+    el.scrollTop = el.scrollHeight;
+  };
+  logEs.onerror = () => { try { logEs.close(); } catch {} logEs = null; setTimeout(startLogStream, 2000); };
+}
+
+let chatEs = null;
+$("#chat-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const repo = $("#chat-repo").value;
+  const msg = $("#chat-msg").value.trim();
+  if (!repo || !msg) return;
+  const el = $("#chat-stream");
+  el.textContent = "";
+  if (chatEs) try { chatEs.close(); } catch {}
+  const url = "/chat?repo=" + encodeURIComponent(repo) + "&message=" + encodeURIComponent(msg);
+  chatEs = new EventSource(url);
+  chatEs.addEventListener("chunk", (ev) => {
+    el.textContent += ev.data;
+    el.scrollTop = el.scrollHeight;
+  });
+  chatEs.addEventListener("done", () => { try { chatEs.close(); } catch {} chatEs = null; });
+  chatEs.onerror = () => { try { chatEs.close(); } catch {} chatEs = null; };
+  $("#chat-msg").value = "";
+});
+
+async function renderRepoControls() {
+  await loadRepos();
+  const el = $("#repo-controls");
+  el.innerHTML = "";
+  for (const r of repos) {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.style.marginBottom = "6px";
+    row.innerHTML = `<b>${r.name}</b> <span class="status">${r.paused ? "paused" : "active"}</span>
+      <button data-act="pause" data-repo="${r.name}">pause</button>
+      <button data-act="resume" data-repo="${r.name}">resume</button>`;
+    el.appendChild(row);
+  }
+  el.querySelectorAll("button").forEach(b => b.addEventListener("click", async () => {
+    await fetch(`/${b.dataset.act}/${b.dataset.repo}`, { method: "POST" });
+    renderRepoControls();
+  }));
+}
+
+$("#pause-global").addEventListener("click", async () => { await fetch("/pause", { method: "POST" }); loadRepos(); });
+$("#resume-global").addEventListener("click", async () => { await fetch("/resume", { method: "POST" }); loadRepos(); });
+$("#kill").addEventListener("click", async () => { if (confirm("Kill running child and stop timer?")) { await fetch("/kill", { method: "POST" }); loadRepos(); } });
+$("#fix-go").addEventListener("click", async () => {
+  const repo = $("#fix-repo").value;
+  const n = $("#fix-num").value.trim();
+  if (!repo || !n) return;
+  const r = await fetch(`/fix/${repo}/${n}`, { method: "POST" });
+  const data = await r.json();
+  alert(JSON.stringify(data));
+});
+
+loadRepos();
+setInterval(loadRepos, 20000);
+</script>
+</body>
+</html>
