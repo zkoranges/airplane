@@ -32,6 +32,15 @@ export function buildApp() {
     return c.html(html);
   });
 
+  // Tiny inline SVG favicon — keeps the DevTools console clean.
+  app.get("/favicon.ico", (c) =>
+    c.body(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" fill="#1f86ff"/><path d="M3 10 L8 4 L13 10 L11 10 L8 7 L5 10 Z" fill="#fff"/></svg>`,
+      200,
+      { "content-type": "image/svg+xml" }
+    )
+  );
+
   app.get("/repos", (c) => {
     const cfg = getConfig();
     return c.json({

@@ -4,16 +4,22 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <title>Airplane</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.ico" />
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; background: #0b0d10; color: #e6e6e6; font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
-  header { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid #23262b; position: sticky; top: 0; background: #0b0d10; z-index: 10; }
+  header { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid #23262b; position: sticky; top: 0; background: #0b0d10; z-index: 10; }
   header h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: 0.5px; }
-  header .spacer { flex: 1; }
-  nav { display: flex; gap: 4px; }
-  nav button { background: #181b20; color: #cbd1d8; border: 1px solid #23262b; padding: 8px 12px; border-radius: 6px; font: inherit; cursor: pointer; }
+  header .spacer { flex: 1; min-width: 0; }
+  nav { display: flex; gap: 4px; flex-wrap: wrap; }
+  nav button { background: #181b20; color: #cbd1d8; border: 1px solid #23262b; padding: 7px 10px; border-radius: 6px; font: inherit; cursor: pointer; min-height: 36px; }
   nav button.active { background: #1f86ff; color: #fff; border-color: #1f86ff; }
+  @media (max-width: 480px) {
+    header { padding: 8px 10px; }
+    header h1 { flex-basis: auto; }
+    nav button { padding: 6px 9px; font-size: 13px; }
+  }
   main { padding: 12px; padding-bottom: 80px; max-width: 900px; margin: 0 auto; }
   .view { display: none; }
   .view.active { display: block; }
@@ -34,10 +40,16 @@
   .tag.review { background: #1d76db; }
   .tag.blocked { background: #b60205; }
   .tag.failed { background: #d93f0b; }
-  .chat-form { position: fixed; left: 0; right: 0; bottom: 0; padding: 8px; background: #0b0d10; border-top: 1px solid #23262b; display: none; gap: 6px; }
+  .chat-form { position: fixed; left: 0; right: 0; bottom: 0; padding: 8px; background: #0b0d10; border-top: 1px solid #23262b; display: none; gap: 6px; box-sizing: border-box; }
   .chat-form.active { display: flex; }
-  .chat-form input.msg { flex: 1; }
-  .chat-form select { flex-basis: 120px; }
+  .chat-form input.msg { flex: 1; min-width: 0; }
+  .chat-form select { flex: 0 1 110px; min-width: 0; }
+  .chat-form button[type="submit"] { flex: 0 0 auto; }
+  @media (max-width: 480px) {
+    .chat-form { padding: 6px; gap: 4px; }
+    .chat-form select { flex-basis: 90px; padding: 8px 6px; }
+    .chat-form input.msg, .chat-form button[type="submit"] { padding: 8px 10px; }
+  }
   .status { padding: 6px 10px; border-radius: 6px; background: #181b20; font-size: 12px; color: #8a95a2; }
   h3 { margin: 14px 0 6px; font-size: 13px; color: #8a95a2; text-transform: uppercase; letter-spacing: 0.5px; }
 </style>
