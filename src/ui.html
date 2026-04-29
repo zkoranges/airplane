@@ -51,6 +51,11 @@
     .chat-form input.msg, .chat-form button[type="submit"] { padding: 8px 10px; }
   }
   .status { padding: 6px 10px; border-radius: 6px; background: #181b20; font-size: 12px; color: #8a95a2; }
+  .repo-info { padding: 8px 10px; margin-bottom: 8px; border: 1px solid #23262b; border-radius: 6px; background: #12151a; font-size: 12px; color: #cbd1d8; line-height: 1.5; word-break: break-all; }
+  .repo-info b { color: #fff; }
+  .repo-info .meta { color: #8a95a2; }
+  .repo-info a { color: #1f86ff; text-decoration: none; }
+  .repo-info code { color: #cbd1d8; background: #0f1115; padding: 1px 5px; border-radius: 3px; font-size: 11px; }
   h3 { margin: 14px 0 6px; font-size: 13px; color: #8a95a2; text-transform: uppercase; letter-spacing: 0.5px; }
 </style>
 </head>
@@ -69,6 +74,7 @@
 
 <main>
   <section id="chat" class="view active">
+    <div id="repo-info" class="repo-info" hidden></div>
     <div id="chat-output" class="card"><pre id="chat-stream">Pick a repo, type a message, hit send.</pre></div>
   </section>
 
@@ -95,13 +101,17 @@
     <div class="card">
       <h3>Per repo</h3>
       <div id="repo-controls"></div>
+      <div style="margin-top:10px;font-size:12px;color:#8a95a2;line-height:1.5">
+        To add or remove repos, edit <code>airplane.config.ts</code> and save —
+        the config is hot-reloaded. (By design: config is code, not UI.)
+      </div>
     </div>
     <div class="card">
       <h3>Fix now</h3>
-      <div class="row">
-        <select id="fix-repo"></select>
-        <input id="fix-num" placeholder="issue #" style="width: 100px" />
-        <button id="fix-go" class="primary">fix now</button>
+      <div class="row" style="gap: 6px">
+        <select id="fix-repo" style="flex:1; min-width:0; max-width: 100%"></select>
+        <input id="fix-num" placeholder="issue #" style="width: 90px; flex:0 0 auto" />
+        <button id="fix-go" class="primary" style="flex:0 0 auto">fix now</button>
       </div>
     </div>
   </section>
@@ -126,24 +136,44 @@ function setView(name) {
   if (name === "controls") renderRepoControls();
 }
 $$("nav button").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
+$("#chat-repo").addEventListener("change", renderRepoInfo);
 
 let repos = [];
 async function loadRepos() {
   const r = await fetch("/repos");
   const data = await r.json();
   repos = data.repos || [];
-  const set = (sel) => {
+  const set = (sel, prevValue) => {
     sel.innerHTML = "";
     for (const r of repos) {
       const opt = document.createElement("option");
       opt.value = r.name;
-      opt.textContent = r.name + (r.paused ? " (paused)" : "");
+      const tag = r.ownerRepo ? ` — ${r.ownerRepo}` : "";
+      opt.textContent = r.name + tag + (r.paused ? " (paused)" : "");
       sel.appendChild(opt);
     }
+    if (prevValue && repos.some((r) => r.name === prevValue)) sel.value = prevValue;
   };
-  set($("#chat-repo"));
-  set($("#fix-repo"));
+  set($("#chat-repo"), $("#chat-repo").value);
+  set($("#fix-repo"), $("#fix-repo").value);
   $("#status").textContent = `${repos.length} repo${repos.length === 1 ? "" : "s"} · ${data.paused ? "PAUSED" : "running"}`;
+  renderRepoInfo();
+}
+
+function renderRepoInfo() {
+  const el = $("#repo-info");
+  if (!el) return;
+  const sel = $("#chat-repo");
+  if (!sel || !sel.value || !repos.length) { el.hidden = true; return; }
+  const r = repos.find((x) => x.name === sel.value);
+  if (!r) { el.hidden = true; return; }
+  const origin = r.githubUrl
+    ? `<a href="${r.githubUrl}" target="_blank">${escapeHtml(r.ownerRepo)}</a>`
+    : `<span class="meta">no GitHub remote</span>`;
+  el.innerHTML = `<b>${escapeHtml(r.name)}</b> ${r.paused ? '<span class="tag blocked">paused</span>' : ''}<br>
+    <span class="meta">path</span> <code>${escapeHtml(r.path)}</code><br>
+    <span class="meta">origin</span> ${origin} · <span class="meta">branch</span> <code>${escapeHtml(r.defaultBranch)}</code>`;
+  el.hidden = false;
 }
 
 async function loadIssues() {
@@ -215,15 +245,26 @@ async function renderRepoControls() {
   const el = $("#repo-controls");
   el.innerHTML = "";
   for (const r of repos) {
-    const row = document.createElement("div");
-    row.className = "row";
-    row.style.marginBottom = "6px";
-    row.innerHTML = `<b>${r.name}</b> <span class="status">${r.paused ? "paused" : "active"}</span>
-      <button data-act="pause" data-repo="${r.name}">pause</button>
-      <button data-act="resume" data-repo="${r.name}">resume</button>`;
-    el.appendChild(row);
+    const card = document.createElement("div");
+    card.style.cssText = "padding:8px 0;border-bottom:1px dashed #23262b;";
+    const origin = r.githubUrl
+      ? `<a href="${r.githubUrl}" target="_blank">${escapeHtml(r.ownerRepo)}</a>`
+      : `<span class="meta">no GitHub remote</span>`;
+    card.innerHTML = `
+      <div class="row" style="margin-bottom:4px">
+        <b>${escapeHtml(r.name)}</b>
+        <span class="status">${r.paused ? "paused" : "active"}</span>
+        <span class="spacer" style="flex:1"></span>
+        <button data-act="pause" data-repo="${r.name}">pause</button>
+        <button data-act="resume" data-repo="${r.name}">resume</button>
+      </div>
+      <div style="font-size:12px;color:#8a95a2;line-height:1.5;word-break:break-all">
+        path <code>${escapeHtml(r.path)}</code><br>
+        origin ${origin} · branch <code>${escapeHtml(r.defaultBranch)}</code>
+      </div>`;
+    el.appendChild(card);
   }
-  el.querySelectorAll("button").forEach(b => b.addEventListener("click", async () => {
+  el.querySelectorAll("button[data-act]").forEach(b => b.addEventListener("click", async () => {
     await fetch(`/${b.dataset.act}/${b.dataset.repo}`, { method: "POST" });
     renderRepoControls();
   }));

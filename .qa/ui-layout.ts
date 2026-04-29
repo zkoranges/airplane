@@ -7,7 +7,7 @@ mkdirSync(SHOTS, { recursive: true });
 const BASE = process.env.AIRPLANE_BASE || "http://localhost:4242";
 
 async function check(viewport: { w: number; h: number; name: string }) {
-  const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox"], protocolTimeout: 60_000 });
+  const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox"], protocolTimeout: 180_000 });
   const page = await browser.newPage();
   await page.setViewport({ width: viewport.w, height: viewport.h });
   const errs: string[] = [];

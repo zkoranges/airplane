@@ -70,10 +70,12 @@ Then open `http://<this-laptop>:4242` from your phone over Tailscale. No auth �
 
 ## UI
 
-- **chat** — repo picker + text input. SSE stream of Claude output.
+- **chat** — repo picker + text input. SSE stream of Claude output. The picker shows each repo's local path, GitHub origin (clickable), and default branch above the message box — so you always know exactly which folder Claude is about to operate on.
 - **issues** — all airplane-labeled issues across your repos, grouped by state.
 - **log** — live tail of `airplane.log`.
-- **controls** — global pause/resume, per-repo pause/resume, kill switch, manual fix trigger.
+- **controls** — global pause/resume, per-repo pause/resume (each repo card shows path, origin, and branch), kill switch, manual fix trigger.
+
+> **Adding/removing repos is a config edit, not a UI action.** Open `airplane.config.ts`, add or remove an entry, save — the config hot-reloads. This is by design: config is code, lives in the repo, committed like everything else.
 
 ## Labels
 

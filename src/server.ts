@@ -41,12 +41,22 @@ export function buildApp() {
     )
   );
 
-  app.get("/repos", (c) => {
+  app.get("/repos", async (c) => {
     const cfg = getConfig();
-    return c.json({
-      paused: isGloballyPaused(),
-      repos: cfg.repos.map((r) => ({ name: r.name, paused: !!r.paused, defaultBranch: r.defaultBranch })),
-    });
+    const repos = await Promise.all(
+      cfg.repos.map(async (r) => {
+        const slug = await ownerRepo(r.path);
+        return {
+          name: r.name,
+          path: r.path,
+          defaultBranch: r.defaultBranch,
+          paused: !!r.paused,
+          ownerRepo: slug === "unknown/unknown" ? null : slug,
+          githubUrl: slug === "unknown/unknown" ? null : `https://github.com/${slug}`,
+        };
+      })
+    );
+    return c.json({ paused: isGloballyPaused(), repos });
   });
 
   app.get("/issues", async (c) => {

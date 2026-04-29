@@ -1,0 +1,11 @@
+import puppeteer from "puppeteer";
+const b = await puppeteer.launch({ headless: true, args: ["--no-sandbox"], protocolTimeout: 60_000 });
+const p = await b.newPage();
+p.on("console", (m) => console.log("[console:" + m.type() + "]", m.text()));
+p.on("pageerror", (e) => console.log("[pageerror]", e.message));
+await p.goto("http://localhost:4242/", { waitUntil: "domcontentloaded", timeout: 10_000 });
+console.log("title=", await p.title());
+await new Promise((r) => setTimeout(r, 3000));
+const repos = await p.evaluate(() => (window as any).repos || "no");
+console.log("repos:", JSON.stringify(repos));
+await b.close();
