@@ -101,9 +101,19 @@
     <div class="card">
       <h3>Per repo</h3>
       <div id="repo-controls"></div>
-      <div style="margin-top:10px;font-size:12px;color:#8a95a2;line-height:1.5">
-        To add or remove repos, edit <code>airplane.config.ts</code> and save —
-        the config is hot-reloaded. (By design: config is code, not UI.)
+    </div>
+
+    <div class="card">
+      <h3>Add repo</h3>
+      <form id="add-repo-form" class="row" style="flex-wrap:wrap; gap:6px">
+        <input id="add-repo-path" placeholder="/absolute/path/to/local/repo" required style="flex:1; min-width: 220px" />
+        <input id="add-repo-name" placeholder="name (optional)" style="flex:0 1 160px; min-width: 0" />
+        <button class="primary" type="submit">add</button>
+      </form>
+      <div id="add-repo-msg" style="margin-top:8px;font-size:12px;color:#8a95a2;line-height:1.5">
+        Point Airplane at a local folder that's already a git repo with a GitHub remote.
+        Name and default branch are auto-derived from <code>git</code> if you leave them blank.
+        Repos added here are saved to <code>.airplane/repos.json</code> and survive restarts.
       </div>
     </div>
     <div class="card">
@@ -244,19 +254,31 @@ async function renderRepoControls() {
   await loadRepos();
   const el = $("#repo-controls");
   el.innerHTML = "";
+  if (!repos.length) {
+    el.innerHTML = `<div class="meta" style="color:#8a95a2;font-size:12px">No repos yet — add one below.</div>`;
+    return;
+  }
   for (const r of repos) {
     const card = document.createElement("div");
     card.style.cssText = "padding:8px 0;border-bottom:1px dashed #23262b;";
     const origin = r.githubUrl
       ? `<a href="${r.githubUrl}" target="_blank">${escapeHtml(r.ownerRepo)}</a>`
       : `<span class="meta">no GitHub remote</span>`;
+    const sourceTag = r.source === "dynamic"
+      ? `<span class="status" title="added via UI">UI</span>`
+      : `<span class="status" title="defined in airplane.config.ts">config</span>`;
+    const removeBtn = r.source === "dynamic"
+      ? `<button class="danger" data-act="remove" data-repo="${escapeHtml(r.name)}">remove</button>`
+      : "";
     card.innerHTML = `
-      <div class="row" style="margin-bottom:4px">
+      <div class="row" style="margin-bottom:4px;gap:6px;flex-wrap:wrap">
         <b>${escapeHtml(r.name)}</b>
         <span class="status">${r.paused ? "paused" : "active"}</span>
+        ${sourceTag}
         <span class="spacer" style="flex:1"></span>
-        <button data-act="pause" data-repo="${r.name}">pause</button>
-        <button data-act="resume" data-repo="${r.name}">resume</button>
+        <button data-act="pause" data-repo="${escapeHtml(r.name)}">pause</button>
+        <button data-act="resume" data-repo="${escapeHtml(r.name)}">resume</button>
+        ${removeBtn}
       </div>
       <div style="font-size:12px;color:#8a95a2;line-height:1.5;word-break:break-all">
         path <code>${escapeHtml(r.path)}</code><br>
@@ -265,10 +287,51 @@ async function renderRepoControls() {
     el.appendChild(card);
   }
   el.querySelectorAll("button[data-act]").forEach(b => b.addEventListener("click", async () => {
-    await fetch(`/${b.dataset.act}/${b.dataset.repo}`, { method: "POST" });
+    const act = b.dataset.act, repo = b.dataset.repo;
+    if (act === "remove") {
+      if (!confirm(`Remove "${repo}" from Airplane?\n(The local folder is NOT deleted; this only stops Airplane from tracking it.)`)) return;
+      const r = await fetch(`/repos/${encodeURIComponent(repo)}`, { method: "DELETE" });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        alert(j.error || `remove failed (${r.status})`);
+      }
+    } else {
+      await fetch(`/${act}/${encodeURIComponent(repo)}`, { method: "POST" });
+    }
     renderRepoControls();
   }));
 }
+
+$("#add-repo-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const path = $("#add-repo-path").value.trim();
+  const name = $("#add-repo-name").value.trim();
+  const msgEl = $("#add-repo-msg");
+  if (!path) return;
+  msgEl.textContent = "adding…";
+  msgEl.style.color = "#8a95a2";
+  try {
+    const r = await fetch("/repos", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path, name: name || undefined }),
+    });
+    const j = await r.json();
+    if (!r.ok || !j.ok) {
+      msgEl.textContent = "✗ " + (j.error || `failed (${r.status})`);
+      msgEl.style.color = "#ff7a7a";
+      return;
+    }
+    msgEl.textContent = `✓ added "${j.repo.name}"${j.repo.ownerRepo ? ` (${j.repo.ownerRepo})` : ""}`;
+    msgEl.style.color = "#76e69b";
+    $("#add-repo-path").value = "";
+    $("#add-repo-name").value = "";
+    await renderRepoControls();
+  } catch (err) {
+    msgEl.textContent = "✗ " + (err && err.message || String(err));
+    msgEl.style.color = "#ff7a7a";
+  }
+});
 
 $("#pause-global").addEventListener("click", async () => { await fetch("/pause", { method: "POST" }); loadRepos(); });
 $("#resume-global").addEventListener("click", async () => { await fetch("/resume", { method: "POST" }); loadRepos(); });

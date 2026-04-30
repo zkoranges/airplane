@@ -73,9 +73,16 @@ Then open `http://<this-laptop>:4242` from your phone over Tailscale. No auth �
 - **chat** — repo picker + text input. SSE stream of Claude output. The picker shows each repo's local path, GitHub origin (clickable), and default branch above the message box — so you always know exactly which folder Claude is about to operate on.
 - **issues** — all airplane-labeled issues across your repos, grouped by state.
 - **log** — live tail of `airplane.log`.
-- **controls** — global pause/resume, per-repo pause/resume (each repo card shows path, origin, and branch), kill switch, manual fix trigger.
+- **controls** — global pause/resume, per-repo pause/resume, kill switch, manual fix trigger, **add repo** form, and per-repo **remove** for UI-added repos.
 
-> **Adding/removing repos is a config edit, not a UI action.** Open `airplane.config.ts`, add or remove an entry, save — the config hot-reloads. This is by design: config is code, lives in the repo, committed like everything else.
+## Adding repos
+
+You have two paths, both first-class:
+
+1. **`airplane.config.ts`** — same as before. Static, committed alongside the project, hot-reloaded on save. Repos here show a `config` tag in the UI and can't be removed via the UI.
+2. **UI → Controls → Add repo** — type an absolute path to a local git repo, hit Add. Airplane auto-derives the name (folder basename, slugified) and default branch (from `git symbolic-ref refs/remotes/origin/HEAD`), and discovers the GitHub origin via `gh repo view`. Persisted to `.airplane/repos.json`, survives restarts. These show a `UI` tag and can be removed from the same page.
+
+UI-added repos with their on-disk folder missing at startup are auto-pruned with a log line — useful when you move folders around.
 
 ## Labels
 
@@ -93,7 +100,9 @@ All local-bind, all unauthenticated.
 
 ```
 GET  /                     UI
-GET  /repos                repos + pause state (JSON)
+GET    /repos              repos + pause state + source tag (JSON)
+POST   /repos               add a UI-managed repo {path, name?, defaultBranch?}
+DELETE /repos/:name         remove a UI-added repo (config-defined repos rejected)
 GET  /issues               all airplane-labeled issues (JSON)
 GET  /chat?repo=&message=  SSE chat stream (used by browser EventSource)
 POST /chat                 SSE chat stream, JSON body {repo, message}

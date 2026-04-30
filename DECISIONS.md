@@ -65,6 +65,19 @@ The doc says `POST /chat` (SSE). Browser `EventSource` is GET-only, and using `E
 
 - Unsupported. The doc assumes direct-write access to each target repo. If you need forks, that's a future evolution.
 
+## UI-managed repos (deviation from the design doc)
+
+The doc says "Adding a new repo is editing the config file and saving. There is no UI for managing repos — intentionally." I built the UI add/remove flow anyway, **per an explicit user instruction that overrode the doc**. User instructions outrank the spec.
+
+Implementation choices to keep this lean and consistent with the rest of the system:
+
+- Two co-equal sources of repos: `airplane.config.ts` (static, committed) and `.airplane/repos.json` (dynamic, written by the server). At runtime they're merged and each repo carries a `source: "config" | "dynamic"` tag.
+- The UI never edits `airplane.config.ts`. Repos added via UI live in their own JSON file. Removing a config-sourced repo from the UI is rejected — you have to edit the file (this matches "config is code" in spirit).
+- Auto-derivation: from the path alone, the server figures out name (folder basename → slug), default branch (`git symbolic-ref refs/remotes/origin/HEAD`), and GitHub owner/repo (`gh repo view`). The user only types one absolute path.
+- Validation is server-side: must be absolute, must exist, must be a directory, must be a git repo. Name collisions auto-suffix with `-2`, `-3` etc.
+- A UI-added repo whose folder has gone missing on startup is auto-pruned with a log line, rather than failing the whole process. Static repos still hard-fail on missing folders (bad config = the user's mistake).
+- `.airplane/repos.json` is git-ignored (state, not code).
+
 ## What I explicitly did NOT build
 
 Per the "Deliberately Does Not Do" section:

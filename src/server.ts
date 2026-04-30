@@ -8,9 +8,12 @@ import {
   setGloballyPaused,
   setRepoPaused,
   findRepo,
+  reconcileRepos,
+  repoSource,
 } from "./config";
+import { addDynamic, removeDynamic } from "./dynamicRepos";
 import { streamChat } from "./chat";
-import { tailLog } from "./log";
+import { tailLog, log } from "./log";
 import { fixerManual, killCurrentFixer } from "./fixer";
 import { killCurrentReviewer } from "./reviewer";
 import {
@@ -19,6 +22,7 @@ import {
   FAILED_LABEL,
   FIXING_LABEL,
   REVIEW_LABEL,
+  ensureLabels,
   listIssuesByLabel,
 } from "./github";
 
@@ -51,12 +55,58 @@ export function buildApp() {
           path: r.path,
           defaultBranch: r.defaultBranch,
           paused: !!r.paused,
+          source: repoSource(r.name), // "config" | "dynamic"
           ownerRepo: slug === "unknown/unknown" ? null : slug,
           githubUrl: slug === "unknown/unknown" ? null : `https://github.com/${slug}`,
         };
       })
     );
     return c.json({ paused: isGloballyPaused(), repos });
+  });
+
+  // Add a repo by local folder path. Auto-derives name and default branch
+  // from git. The repo must already be a git repo on disk.
+  app.post("/repos", async (c) => {
+    let body: { path?: string; name?: string; defaultBranch?: string } = {};
+    try {
+      body = await c.req.json();
+    } catch {
+      try {
+        const f = await c.req.parseBody();
+        body = {
+          path: String(f.path || ""),
+          name: f.name ? String(f.name) : undefined,
+          defaultBranch: f.defaultBranch ? String(f.defaultBranch) : undefined,
+        };
+      } catch {}
+    }
+    const taken = new Set(getConfig().repos.map((r) => r.name));
+    const result = await addDynamic({ path: body.path || "", name: body.name, defaultBranch: body.defaultBranch }, taken);
+    if (!result.ok) {
+      log("repos.add.fail", { error: result.error });
+      return c.json({ ok: false, error: result.error }, 400);
+    }
+    reconcileRepos();
+    // best-effort label creation so the new repo is immediately usable.
+    ensureLabels(result.repo.path).catch(() => {});
+    log("repos.add", { name: result.repo.name, path: result.repo.path, ownerRepo: result.ownerRepo });
+    ownerRepoCache.delete(result.repo.path);
+    return c.json({ ok: true, repo: { ...result.repo, ownerRepo: result.ownerRepo, source: "dynamic" } });
+  });
+
+  app.delete("/repos/:name", (c) => {
+    const name = c.req.param("name");
+    if (repoSource(name) !== "dynamic") {
+      return c.json(
+        { ok: false, error: `repo ${name} is defined in airplane.config.ts — remove it there` },
+        400
+      );
+    }
+    const r = removeDynamic(name);
+    if (!r.ok) return c.json(r, 400);
+    reconcileRepos();
+    log("repos.remove", { name });
+    return c.json({ ok: true });
   });
 
   app.get("/issues", async (c) => {

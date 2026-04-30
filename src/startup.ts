@@ -2,7 +2,8 @@ import { run } from "./run";
 import { log } from "./log";
 import { ghCheckAuth, ensureLabels, listIssuesByLabel, swapLabel, AIRPLANE_LABEL, FIXING_LABEL } from "./github";
 import { claudeCheckPresent } from "./claude";
-import { getConfig } from "./config";
+import { getConfig, reconcileRepos, repoSource } from "./config";
+import { removeDynamic } from "./dynamicRepos";
 import { pruneOrphanWorktrees } from "./cleanup";
 
 export async function startupChecks(): Promise<{ ok: boolean; errors: string[] }> {
@@ -18,11 +19,24 @@ export async function startupChecks(): Promise<{ ok: boolean; errors: string[] }
   const auth = await ghCheckAuth();
   if (!auth.ok) errors.push(`gh auth not ready:\n${auth.message}`);
 
+  // Static repos must exist (bad config = startup failure). UI-added repos
+  // that have gone missing on disk get auto-pruned with a log line — the
+  // user moved or deleted the folder; no need to fail the whole process.
   const cfg = getConfig();
+  let prunedAny = false;
   for (const repo of cfg.repos) {
     const r = await run("git", ["rev-parse", "--git-dir"], { cwd: repo.path });
-    if (r.code !== 0) errors.push(`repo ${repo.name} at ${repo.path} is not a git repo`);
+    if (r.code !== 0) {
+      if (repoSource(repo.name) === "dynamic") {
+        log("startup.dynamic.pruned", { name: repo.name, path: repo.path, reason: "not a git repo" });
+        removeDynamic(repo.name);
+        prunedAny = true;
+      } else {
+        errors.push(`repo ${repo.name} at ${repo.path} is not a git repo`);
+      }
+    }
   }
+  if (prunedAny) reconcileRepos();
 
   return { ok: errors.length === 0, errors };
 }
